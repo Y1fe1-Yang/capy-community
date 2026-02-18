@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import UserSwitcher from "@/components/UserSwitcher";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -48,24 +49,19 @@ export default function RootLayout({
                   首页
                 </Link>
                 <Link
+                  href="/my-capy"
+                  className="text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  我的Capy
+                </Link>
+                <Link
                   href="/forum/new"
                   className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                 >
                   发帖
                 </Link>
-                {/* Placeholder for future features */}
-                <div className="relative group">
-                  <button className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
-                    <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-medium">?</span>
-                    </div>
-                  </button>
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                    <div className="px-4 py-2 text-sm text-gray-500">
-                      登录功能开发中
-                    </div>
-                  </div>
-                </div>
+                {/* User Switcher */}
+                <UserSwitcher />
               </div>
             </div>
           </div>

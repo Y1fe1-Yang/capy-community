@@ -14,7 +14,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { requireCapyAccess } from '@/lib/auth'
+import { requireCapyAccess, USE_MOCK } from '@/lib/auth'
+import { getUserCapy, mockRecommendations, getPostWithAuthor } from '@/lib/mock-data'
 
 /**
  * GET /api/capy/recommendations
@@ -36,7 +37,53 @@ export async function GET(request: NextRequest) {
 
     const { user } = authResult
 
-    // Check if user has a Capy Agent
+    // Get query params
+    const { searchParams } = new URL(request.url)
+    const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '10')))
+
+    // Mock模式：从Mock数据获取推荐
+    if (USE_MOCK) {
+      const capy = getUserCapy(user.id)
+      if (!capy) {
+        return NextResponse.json(
+          { error: 'You must create a Capy Agent first to receive recommendations' },
+          { status: 404 }
+        )
+      }
+
+      // 获取该Capy的推荐
+      const userRecommendations = mockRecommendations
+        .filter((rec) => rec.capy_id === capy.id)
+        .slice(0, limit)
+        .map((rec) => {
+          const post = getPostWithAuthor(rec.post_id)
+          return {
+            id: rec.id,
+            post_id: rec.post_id,
+            reason: rec.reason,
+            confidence: rec.confidence_score,
+            created_at: rec.created_at,
+            posts: post
+              ? {
+                  id: post.id,
+                  title: post.title,
+                  content: post.content,
+                  author_id: post.user_id,
+                  created_at: post.created_at,
+                  users: {
+                    id: post.author.user_id,
+                    name: post.author.username,
+                    tier: post.author_tier,
+                  },
+                }
+              : null,
+          }
+        })
+
+      return NextResponse.json({ recommendations: userRecommendations })
+    }
+
+    // 真实模式：从Supabase获取
     const { data: capy, error: capyError } = await supabase
       .from('capy_agents')
       .select('id')
@@ -49,10 +96,6 @@ export async function GET(request: NextRequest) {
         { status: 404 }
       )
     }
-
-    // Get query params
-    const { searchParams } = new URL(request.url)
-    const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '10')))
 
     // Fetch recommendations
     const { data: recommendations, error } = await supabase

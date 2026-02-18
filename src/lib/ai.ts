@@ -14,29 +14,114 @@
 const AI_GATEWAY_BASE_URL = process.env.AI_GATEWAY_BASE_URL || 'https://ai-gateway.happycapy.ai/api/v1/openai/v1'
 const AI_GATEWAY_API_KEY = process.env.AI_GATEWAY_API_KEY || ''
 
-// Model configuration - different Capys use different LLMs!
+// Model configuration - Different Capys use different LLMs!
+// This allows each Capy to have a unique "AI brain" with distinct thinking styles
 const CAPY_MODELS = {
-  '小懒': 'anthropic/claude-opus-4', // 小懒用Claude Opus 4（懒散、深思熟虑）
-  '小勤': 'openai/gpt-4o', // 小勤用GPT-4o（勤奋、快速响应）
-  'default': 'deepseek/deepseek-chat' // 默认用DeepSeek（经济实惠）
-}
+  // Claude Opus 4.6 - For lazy/contemplative personalities
+  // 懒散、深思熟虑的Capy用Claude（更有思考深度）
+  CLAUDE_OPUS: 'anthropic/claude-opus-4-6',
+
+  // GPT-4o - For active/diligent personalities
+  // 勤奋、快速响应的Capy用GPT-4o（更加高效）
+  GPT_4O: 'openai/gpt-4o',
+
+  // Gemini Pro - For curious personalities
+  // 好奇、探索型的Capy用Gemini（多模态能力强）
+  GEMINI_PRO: 'google/gemini-pro-1.5',
+
+  // DeepSeek - Default/fallback for friendly/shy personalities
+  // 友善、害羞的Capy用DeepSeek（经济实惠）
+  DEEPSEEK: 'deepseek/deepseek-chat',
+
+  // Default fallback
+  DEFAULT: 'deepseek/deepseek-chat'
+} as const
 
 /**
- * 根据Capy的名字或性格选择合适的LLM模型
+ * Select the appropriate AI model based on Capy's name and personality
+ *
+ * Selection priority:
+ * 1. Exact name match (e.g., "小懒" -> Claude, "小勤" -> GPT-4o)
+ * 2. Name contains keywords (e.g., "懒" in name -> Claude)
+ * 3. Personality type (e.g., "lazy" -> Claude, "active" -> GPT-4o)
+ * 4. Default fallback (DeepSeek)
+ *
+ * This multi-model approach allows different Capys to have distinct "thinking styles"
+ * and demonstrates the unique characteristics of each LLM!
+ *
+ * @param capy_name - The name of the Capy (e.g., "小懒", "小勤", "好奇宝宝")
+ * @param capy_personality - The personality type (lazy/active/curious/friendly/shy)
+ * @returns The model identifier to use with AI Gateway
  */
 function selectModelForCapy(capy_name?: string, capy_personality?: string): string {
-  if (capy_name && capy_name in CAPY_MODELS) {
-    return CAPY_MODELS[capy_name as keyof typeof CAPY_MODELS]
+  // Priority 1: Exact name match
+  if (capy_name === '小懒') {
+    console.log(`[AI] 🦫 ${capy_name} is using Claude Opus 4.6 (lazy & contemplative)`)
+    return CAPY_MODELS.CLAUDE_OPUS
+  }
+  if (capy_name === '小勤') {
+    console.log(`[AI] 🦫 ${capy_name} is using GPT-4o (diligent & efficient)`)
+    return CAPY_MODELS.GPT_4O
   }
 
-  // 根据性格选择模型
-  if (capy_personality === 'lazy') {
-    return CAPY_MODELS['小懒']
-  } else if (capy_personality === 'active') {
-    return CAPY_MODELS['小勤']
+  // Priority 2: Name contains personality keywords
+  if (capy_name) {
+    const nameLower = capy_name.toLowerCase()
+
+    // Names with "懒" (lazy) -> Claude Opus
+    if (nameLower.includes('懒') || nameLower.includes('lazy')) {
+      console.log(`[AI] 🦫 ${capy_name} is using Claude Opus 4.6 (detected "lazy" in name)`)
+      return CAPY_MODELS.CLAUDE_OPUS
+    }
+
+    // Names with "勤" (diligent) or "活" (active) -> GPT-4o
+    if (nameLower.includes('勤') || nameLower.includes('active') ||
+        nameLower.includes('活') || nameLower.includes('diligent')) {
+      console.log(`[AI] 🦫 ${capy_name} is using GPT-4o (detected "active/diligent" in name)`)
+      return CAPY_MODELS.GPT_4O
+    }
+
+    // Names with "好奇" (curious) -> Gemini Pro
+    if (nameLower.includes('好奇') || nameLower.includes('curious')) {
+      console.log(`[AI] 🦫 ${capy_name} is using Gemini Pro (detected "curious" in name)`)
+      return CAPY_MODELS.GEMINI_PRO
+    }
   }
 
-  return CAPY_MODELS.default
+  // Priority 3: Personality type
+  if (capy_personality) {
+    const personalityLower = capy_personality.toLowerCase()
+
+    // Lazy personality -> Claude Opus
+    if (personalityLower === 'lazy' || personalityLower.includes('懒')) {
+      console.log(`[AI] 🦫 Using Claude Opus 4.6 for personality: ${capy_personality}`)
+      return CAPY_MODELS.CLAUDE_OPUS
+    }
+
+    // Active/diligent personality -> GPT-4o
+    if (personalityLower === 'active' || personalityLower.includes('活') ||
+        personalityLower.includes('勤') || personalityLower.includes('diligent')) {
+      console.log(`[AI] 🦫 Using GPT-4o for personality: ${capy_personality}`)
+      return CAPY_MODELS.GPT_4O
+    }
+
+    // Curious personality -> Gemini Pro
+    if (personalityLower === 'curious' || personalityLower.includes('好奇')) {
+      console.log(`[AI] 🦫 Using Gemini Pro for personality: ${capy_personality}`)
+      return CAPY_MODELS.GEMINI_PRO
+    }
+
+    // Friendly/shy personality -> DeepSeek (default)
+    if (personalityLower === 'friendly' || personalityLower === 'shy' ||
+        personalityLower.includes('友') || personalityLower.includes('羞')) {
+      console.log(`[AI] 🦫 Using DeepSeek for personality: ${capy_personality}`)
+      return CAPY_MODELS.DEEPSEEK
+    }
+  }
+
+  // Default fallback
+  console.log(`[AI] 🦫 Using default model (DeepSeek) for ${capy_name || 'unknown'} / ${capy_personality || 'unknown'}`)
+  return CAPY_MODELS.DEFAULT
 }
 
 /**
