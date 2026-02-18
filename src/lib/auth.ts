@@ -13,6 +13,10 @@
 import { NextRequest } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import type { UserTier } from '@/types/database'
+import { getMockUser } from '@/lib/mock-data'
+
+// 检测是否使用Mock模式（没有配置Supabase）
+export const USE_MOCK = !process.env.NEXT_PUBLIC_SUPABASE_URL
 
 export interface AuthUser {
   id: string
@@ -33,6 +37,21 @@ export async function getUserFromRequest(request: NextRequest): Promise<AuthUser
     return null
   }
 
+  // Mock模式：从Mock数据获取用户
+  if (USE_MOCK) {
+    const user = getMockUser(userId)
+    if (!user) {
+      return null
+    }
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      tier: user.tier,
+    }
+  }
+
+  // 真实模式：从Supabase获取
   const { data: user, error } = await supabase
     .from('users')
     .select('id, email, name, tier')

@@ -14,8 +14,30 @@
 const AI_GATEWAY_BASE_URL = process.env.AI_GATEWAY_BASE_URL || 'https://ai-gateway.happycapy.ai/api/v1/openai/v1'
 const AI_GATEWAY_API_KEY = process.env.AI_GATEWAY_API_KEY || ''
 
-// Model configuration - using OpenRouter models via AI Gateway
-const DEFAULT_MODEL = 'deepseek/deepseek-chat' // Fast and cheap model for recommendations
+// Model configuration - different Capys use different LLMs!
+const CAPY_MODELS = {
+  '小懒': 'anthropic/claude-opus-4', // 小懒用Claude Opus 4（懒散、深思熟虑）
+  '小勤': 'openai/gpt-4o', // 小勤用GPT-4o（勤奋、快速响应）
+  'default': 'deepseek/deepseek-chat' // 默认用DeepSeek（经济实惠）
+}
+
+/**
+ * 根据Capy的名字或性格选择合适的LLM模型
+ */
+function selectModelForCapy(capy_name?: string, capy_personality?: string): string {
+  if (capy_name && capy_name in CAPY_MODELS) {
+    return CAPY_MODELS[capy_name as keyof typeof CAPY_MODELS]
+  }
+
+  // 根据性格选择模型
+  if (capy_personality === 'lazy') {
+    return CAPY_MODELS['小懒']
+  } else if (capy_personality === 'active') {
+    return CAPY_MODELS['小勤']
+  }
+
+  return CAPY_MODELS.default
+}
 
 /**
  * Post interface matching the database schema
@@ -68,6 +90,11 @@ export async function generateRecommendation(
     // Build the prompt based on capy personality
     const prompt = buildRecommendationPrompt(posts, userProfile)
 
+    // 🎯 根据Capy选择不同的LLM模型！
+    const selectedModel = selectModelForCapy(userProfile.capy_name, userProfile.capy_personality)
+
+    console.log(`[Capy ${userProfile.capy_name}] Using model: ${selectedModel}`)
+
     // Call AI Gateway (OpenAI-compatible API)
     const response = await fetch(`${AI_GATEWAY_BASE_URL}/chat/completions`, {
       method: 'POST',
@@ -76,7 +103,7 @@ export async function generateRecommendation(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: DEFAULT_MODEL,
+        model: selectedModel, // 🔥 每只Capy用不同的模型！
         messages: [
           {
             role: 'user',

@@ -10,8 +10,9 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { requireAuth } from '@/lib/auth'
+import { requireAuth, USE_MOCK } from '@/lib/auth'
 import type { CommentCreate } from '@/types/database'
+import { getPostComments, addMockComment, mockPosts, mockUsers, mockProfiles } from '@/lib/mock-data'
 
 /**
  * GET /api/comments
@@ -35,6 +36,36 @@ export async function GET(request: NextRequest) {
 
     const offset = (page - 1) * limit
 
+    // Mock模式：从Mock数据获取评论
+    if (USE_MOCK) {
+      const allComments = getPostComments(postId)
+
+      // 添加作者信息
+      const commentsWithAuthors = allComments.map((comment) => {
+        const user = mockUsers.find((u) => u.id === comment.user_id)
+        const profile = mockProfiles.find((p) => p.user_id === comment.user_id)
+        return {
+          ...comment,
+          author_id: comment.user_id,
+          likes_count: 0,
+          users: user && profile ? { id: user.id, name: user.name, email: user.email, tier: user.tier } : null,
+        }
+      })
+
+      const paginatedComments = commentsWithAuthors.slice(offset, offset + limit)
+
+      return NextResponse.json({
+        comments: paginatedComments,
+        pagination: {
+          page,
+          limit,
+          total: allComments.length,
+          totalPages: Math.ceil(allComments.length / limit),
+        },
+      })
+    }
+
+    // 真实模式：从Supabase获取
     const { data: comments, error, count } = await supabase
       .from('comments')
       .select(
@@ -115,7 +146,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Content is required' }, { status: 400 })
     }
 
-    // Verify that the post exists and is not deleted
+    // Mock模式：添加评论
+    if (USE_MOCK) {
+      // 验证帖子是否存在
+      const post = mockPosts.find((p) => p.id === post_id)
+      if (!post) {
+        return NextResponse.json({ error: 'Post not found' }, { status: 404 })
+      }
+
+      if (post.is_deleted) {
+        return NextResponse.json({ error: 'Cannot comment on deleted post' }, { status: 400 })
+      }
+
+      // 创建评论
+      const newComment = addMockComment({
+        post_id,
+        user_id: user.id,
+        content: content.trim(),
+      })
+
+      // 添加作者信息
+      const userProfile = mockProfiles.find((p) => p.user_id === user.id)
+      const commentWithAuthor = {
+        ...newComment,
+        author_id: newComment.user_id,
+        likes_count: 0,
+        users: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          tier: user.tier,
+        },
+      }
+
+      return NextResponse.json({ comment: commentWithAuthor }, { status: 201 })
+    }
+
+    // 真实模式：验证帖子并创建评论
     const { data: post, error: postError } = await supabase
       .from('posts')
       .select('id, is_deleted')

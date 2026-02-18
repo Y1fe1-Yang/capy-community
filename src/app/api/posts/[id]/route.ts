@@ -10,7 +10,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { requireAuth, verifyOwnership, isMaxTier } from '@/lib/auth'
+import { requireAuth, verifyOwnership, isMaxTier, USE_MOCK } from '@/lib/auth'
+import { getPostWithAuthor, mockPosts } from '@/lib/mock-data'
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -28,6 +29,16 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Post ID is required' }, { status: 400 })
     }
 
+    // Mock模式：从Mock数据获取
+    if (USE_MOCK) {
+      const post = getPostWithAuthor(id)
+      if (!post || post.is_deleted) {
+        return NextResponse.json({ error: 'Post not found' }, { status: 404 })
+      }
+      return NextResponse.json({ post })
+    }
+
+    // 真实模式：从Supabase获取
     const { data: post, error } = await supabase
       .from('posts')
       .select(
@@ -93,7 +104,31 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     const { user } = authResult
 
-    // Check if user is Max tier (can delete any post) or owns the post
+    // Mock模式：标记为删除
+    if (USE_MOCK) {
+      const post = mockPosts.find((p) => p.id === id)
+      if (!post) {
+        return NextResponse.json({ error: 'Post not found' }, { status: 404 })
+      }
+
+      // Check ownership
+      const isOwner = post.user_id === user.id
+      const canDelete = isMaxTier(user.tier) || isOwner
+
+      if (!canDelete) {
+        return NextResponse.json(
+          { error: 'Forbidden: You can only delete your own posts unless you have Max tier' },
+          { status: 403 }
+        )
+      }
+
+      post.is_deleted = true
+      post.updated_at = new Date().toISOString()
+
+      return NextResponse.json({ message: 'Post deleted successfully' })
+    }
+
+    // 真实模式：检查权限并删除
     const isOwner = await verifyOwnership(user.id, id, 'post')
     const canDelete = isMaxTier(user.tier) || isOwner
 

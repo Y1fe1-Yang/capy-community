@@ -10,8 +10,15 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { requireAuth } from '@/lib/auth'
-import type { PostCreate } from '@/types/database'
+import { requireAuth, USE_MOCK } from '@/lib/auth'
+import type { PostCreate, Post } from '@/types/database'
+import {
+  getAllPostsWithAuthors,
+  getPostWithAuthor,
+  addMockPost,
+  mockUsers,
+  mockProfiles,
+} from '@/lib/mock-data'
 
 /**
  * GET /api/posts
@@ -33,6 +40,32 @@ export async function GET(request: NextRequest) {
 
     const offset = (page - 1) * limit
 
+    // Mock模式：返回Mock数据
+    if (USE_MOCK) {
+      let posts = getAllPostsWithAuthors()
+
+      // 排序（Mock数据已按时间排序，这里只做简单处理）
+      if (sort === 'new') {
+        posts = posts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      } else if (sort === 'top') {
+        posts = posts.sort((a, b) => b.view_count - a.view_count)
+      }
+
+      // 分页
+      const paginatedPosts = posts.slice(offset, offset + limit)
+
+      return NextResponse.json({
+        posts: paginatedPosts,
+        pagination: {
+          page,
+          limit,
+          total: posts.length,
+          totalPages: Math.ceil(posts.length / limit),
+        },
+      })
+    }
+
+    // 真实模式：从Supabase获取
     let query = supabase
       .from('posts')
       .select(
@@ -141,7 +174,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Category is required' }, { status: 400 })
     }
 
-    // Create post
+    // Mock模式：添加到Mock数据
+    if (USE_MOCK) {
+      const newPost = addMockPost({
+        user_id: user.id,
+        title: title.trim(),
+        content: content.trim(),
+      })
+
+      const postWithAuthor = getPostWithAuthor(newPost.id)
+
+      return NextResponse.json({ post: postWithAuthor }, { status: 201 })
+    }
+
+    // 真实模式：插入到Supabase
     const newPost: PostCreate = {
       title: title.trim(),
       content: content.trim(),

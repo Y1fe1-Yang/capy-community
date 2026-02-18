@@ -12,7 +12,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { requireCapyAccess } from '@/lib/auth'
+import { requireCapyAccess, USE_MOCK } from '@/lib/auth'
+import { getUserCapy, mockCapys } from '@/lib/mock-data'
 
 /**
  * GET /api/capy
@@ -31,7 +32,13 @@ export async function GET(request: NextRequest) {
 
     const { user } = authResult
 
-    // Fetch user's Capy Agent
+    // Mock模式：从Mock数据获取
+    if (USE_MOCK) {
+      const capy = getUserCapy(user.id)
+      return NextResponse.json({ capy: capy || null })
+    }
+
+    // 真实模式：从Supabase获取
     const { data: capy, error } = await supabase
       .from('capy_agents')
       .select('*')
@@ -77,7 +84,24 @@ export async function POST(request: NextRequest) {
 
     const { user } = authResult
 
-    // Check if user already has a Capy
+    // Mock模式：不允许创建新Capy（Mock数据已包含）
+    if (USE_MOCK) {
+      const existingCapy = getUserCapy(user.id)
+      if (existingCapy) {
+        return NextResponse.json(
+          { error: 'You already have a Capy Agent. Each Max user can only have one Capy.' },
+          { status: 400 }
+        )
+      }
+
+      // 在Mock模式下，可以返回一个模拟消息
+      return NextResponse.json(
+        { error: 'Capy creation is not available in Mock mode. Please use the pre-configured Capy agents.' },
+        { status: 400 }
+      )
+    }
+
+    // 真实模式：检查并创建Capy
     const { data: existingCapy, error: checkError } = await supabase
       .from('capy_agents')
       .select('id')
